@@ -4,15 +4,19 @@ import pandas as pd
 
 # CREATE DIRECTORIES
 import os
+import shutil
 
 logs_dir = "./logs"
 models_dir = "./models"
 plots_dir = "./plots"
 
 # Create the folders if they don't exist
-for dir in [logs_dir, models_dir, plots_dir]:
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+if "session_initialized" not in st.session_state:
+  for dir in [logs_dir, models_dir, plots_dir]:
+      if os.path.exists(dir):
+        shutil.rmtree(dir)  # Remove the directory and its contents
+      os.makedirs(dir)  # Create the directory
+  st.session_state.session_initialized = True  # Mark the session as initialized
 
 # STREAMLIT CONFIG
 st.set_page_config(
