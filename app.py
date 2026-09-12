@@ -2,6 +2,19 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
+# CREATE DIRECTORIES
+import os
+
+logs_dir = "./logs"
+models_dir = "./models"
+plots_dir = "./plots"
+
+# Create the folders if they don't exist
+for dir in [logs_dir, models_dir, plots_dir]:
+    if not os.path.exists(dir):
+        os.makedirs(dir)
+
+# STREAMLIT CONFIG
 st.set_page_config(
     page_title="Neural Network Demonstration",
     layout="wide"  # Turns on wide mode to remove huge margins
