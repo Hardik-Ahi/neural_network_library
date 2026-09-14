@@ -5,12 +5,12 @@ from nn.trainer import Logger
 import os, time
 
 class Plotter:
-    def read_file(self, path):
-        self.data = Logger.load_data(path)
+    def read_file(self, string):
+        self.data = Logger.load_data(string)
         if self.data is None:
             print("unsucessful.")
         else:
-            print("file read.")
+            print("JSON string read.")
     
     @staticmethod
     def skip_samples(array, limit):

@@ -261,7 +261,8 @@ class Logger:
         ref['loss'] = loss
         if confusion_matrix is not None:
             ref['confusion-matrix'] = confusion_matrix
-        
+    
+    '''
     def write_log(self, directory = "./logs", name = None):
         if not os.access(directory, os.F_OK):
             print(f"access to {directory} not allowed")
@@ -276,7 +277,15 @@ class Logger:
 
         print(f'output written to {path}')
         self.reset()
+    '''
+
+    def write_log(self):
+        self.object['n-epochs'] = self.epoch+1  # actual epochs = 0-indexed, this value = len() of that => 1-indexed 'count' of epochs
+        string = json.dumps(self.object)
+        self.reset()
+        return string
     
+    '''
     @staticmethod
     def load_data(path):
         if not os.path.exists(path):
@@ -284,4 +293,10 @@ class Logger:
             return
         with open(path, 'r') as f:
             data = json.loads(f.read())
+        return data
+    '''
+
+    @staticmethod
+    def load_data(string):
+        data = json.loads(string)
         return data

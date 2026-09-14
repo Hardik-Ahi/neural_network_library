@@ -2,6 +2,10 @@
 A modular neural network framework with a TensorFlow-like API and custom visualization tooling, built from the ground up using NumPy and Matplotlib.
 
 [Watch Demo on YouTube](https://youtu.be/qJAhmKIAFPU)
+
+### Note:
+> Jupyter Notebooks included here don't run anymore due to modifying the library code for **Streamlit** compatibility.
+
 ## Quickstart for Windows
 
 1. Install Python 3.9
