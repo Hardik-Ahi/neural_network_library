@@ -2,22 +2,6 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 
-# CREATE DIRECTORIES
-import os
-import shutil
-
-logs_dir = "./logs"
-models_dir = "./models"
-plots_dir = "./plots"
-
-# Create the folders if they don't exist
-if "session_initialized" not in st.session_state:
-  for dir in [logs_dir, models_dir, plots_dir]:
-      if os.path.exists(dir):
-        shutil.rmtree(dir)  # Remove the directory and its contents
-      os.makedirs(dir)  # Create the directory
-  st.session_state.session_initialized = True  # Mark the session as initialized
-
 # STREAMLIT CONFIG
 st.set_page_config(
     page_title="Neural Network Demonstration",
@@ -72,7 +56,6 @@ if "model" not in st.session_state:
     st.session_state.model = Model(BinaryLoss(), 1)
     st.session_state.model.add_layer(Layer(2, activation_functions["None"][0], activation_functions["None"][1]))
     st.session_state.model.add_layer(Layer(1, activation_functions["Sigmoid"][0], activation_functions["Sigmoid"][1]))
-    st.session_state.model_name = "AND Gate Model"
   
 if "activations" not in st.session_state:
     st.session_state.activations = list()
@@ -97,10 +80,6 @@ with col4:
     activations.insert(-1, activation_function)
     st.success(f"Layer {layer_number} added!")
 
-if st.button("Compile Model"):
-  model.compile()
-  st.success("Model compiled!")
-
 # Display model layers as table
 st.subheader("Model Summary")
 
@@ -109,6 +88,10 @@ for i, layer in enumerate(model.layers):
   layers.loc[i] = [i+1, layer.n_neurons, activations[i]]
 
 st.dataframe(layers, hide_index=True)
+
+if st.button("Compile Model"):
+  model.compile()
+  st.success("Model compiled!")
 
 show_weights_biases = st.checkbox("Show Weights and Biases")
 
@@ -134,41 +117,65 @@ if show_weights_biases:
 
 # PREP PLOTTING
 from nn.plotter import Plotter
+from nn.trainer import Logger
+import io
 
 if 'plotter' not in st.session_state:
   st.session_state.plotter = Plotter()
 
+if 'data' not in st.session_state:
+  st.session_state.data = None
+
 plotter = st.session_state.plotter
 
 @st.cache_data
-def load_history(name = 'batch_size_1.txt'):
-  plotter.read_file(f'./logs/{name}')
-  return f'./logs/{name}'
+def load_history(string):  # returns JSON (Python) object from string - serializable
+  return Logger.load_data(string)
 
 @st.cache_data
-def plot_gradients(name = 'batch_size_1', points = 700):
-  plotter.plot_gradients('./plots', name, points)
-  return f'./plots/gradients_{name}.png'
+def plot_gradients(string):
+  gradients = plotter.plot_gradients(st.session_state.data, n_points=700)
+  buf = io.BytesIO()
+  gradients.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
 
 @st.cache_data
-def plot_weights(name = 'batch_size_1', points = 700):
-  plotter.plot_weights('./plots', name, points)
-  return f'./plots/weights_{name}.png'
+def plot_weights(string):
+  weights = plotter.plot_weights(st.session_state.data, n_points=700)
+  buf = io.BytesIO()
+  weights.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
 
 @st.cache_data
-def plot_score(name = 'batch_size_1', points = 700):
-  plotter.plot_score('./plots', name, points)
-  return f'./plots/score_{name}.png'
+def plot_score(string):
+  score = plotter.plot_score(st.session_state.data, n_points=700)
+  buf = io.BytesIO()
+  score.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
 
 @st.cache_data
-def plot_predictions(X_train, _dir = './plots', name = 'batch_size_1'):
-  plotter.plot_predictions(X_train, _dir, name)
-  return f'{_dir}/predictions_{name}.png'
+def plot_predictions(string, _X_train):  # _ underscore means skip hashing on this key
+  predictions = plotter.plot_predictions(st.session_state.data, _X_train)
+  buf = io.BytesIO()
+  predictions.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
 
 @st.cache_data
-def plot_loss_landscape(_trainer, X_train, y_train, _dir = './plots', name = 'batch_size_1'):
-  plotter.plot_contours(_trainer, X_train, y_train, _dir, name)
-  return f'{_dir}/contours_{name}.png'
+def plot_loss_landscape(string, _trainer, _X_train, _y_train):
+  contours = plotter.plot_contours(st.session_state.data, _trainer, _X_train, _y_train)
+  buf = io.BytesIO()
+  contours.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
 
 # TRAIN
 from nn.trainer import Trainer
@@ -185,41 +192,49 @@ batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, v
 learning_rate = st.number_input("Learning Rate (0.001 - 1.0)", min_value=0.001, max_value=1.0, value=0.02, step=0.001, format="%.3f")
 epochs = st.number_input("Epochs (1 - 500)", min_value=1, max_value=500, value=120, step=1)
 
+if 'history' not in st.session_state:
+  st.session_state.history = None
+
 if st.button("Train Model"):
   with st.spinner("Training in progress..."):
     trainer.train(X_train, y_train, batch_size, learning_rate, epochs = epochs)
+
   st.success("Training completed!")
-
-  trainer.save_history('./logs', 'batch_size_1')
-  model.save_weights('./models', 'batch_size_1')
-
-  st.cache_data.clear()  # clear all cache to ensure plots are generated with the latest training data
+  st.session_state.history = trainer.save_history()
 
 # PLOT
 st.header("Training History")
 
 if st.button("Plot History"):
   with st.spinner("Reading log file..."):
-    load_history()
+    if st.session_state.history is None:
+      st.error("No training history found. Please train the model first.")
+      st.stop()  # stop further execution if no history is found
+    st.session_state.data = load_history(st.session_state.history)
 
   with st.spinner("Plotting gradients..."):
-    gradient_path = plot_gradients()
-    st.image(gradient_path, caption='Gradients', width='stretch')
+    gradient_path = plot_gradients(st.session_state.history)
+    st.subheader("Gradients")
+    st.image(gradient_path, use_container_width=True)
 
   with st.spinner("Plotting weights..."):
-    weight_path = plot_weights()
-    st.image(weight_path, caption='Weights', width='stretch')
+    weight_path = plot_weights(st.session_state.history)
+    st.subheader("Weights")
+    st.image(weight_path, use_container_width=True)
 
   with st.spinner("Plotting accuracy..."):
-    score_path = plot_score()
-    st.image(score_path, caption='Accuracy', width='stretch')
+    score_path = plot_score(st.session_state.history)
+    st.subheader("Accuracy")
+    st.image(score_path, use_container_width=True)
 
   with st.spinner("Plotting outputs..."):
-    prediction_path = plot_predictions(X_train)
-    st.image(prediction_path, caption='Predictions', width='stretch')
+    prediction_path = plot_predictions(st.session_state.history, X_train)
+    st.subheader("Predictions")
+    st.image(prediction_path, use_container_width=True)
 
   with st.spinner("Plotting loss landscape (this takes a while)..."):
-    loss_landscape_path = plot_loss_landscape(trainer, X_train, y_train, "./plots", "batch_size_1")
-    st.image(loss_landscape_path, caption='Loss Landscape', width='stretch')
+    loss_landscape_path = plot_loss_landscape(st.session_state.history, trainer, X_train, y_train)
+    st.subheader("Loss Landscape")
+    st.image(loss_landscape_path, use_container_width=True)
 
   st.success("Plots generated!")

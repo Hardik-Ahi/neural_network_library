@@ -46,8 +46,8 @@ class Trainer:
             self.model.layers[i].z_ = np.matmul(self.model.weights[i-1].matrix, self.model.layers[i-1].a_) + self.model.layers[i].b_
             self.model.layers[i].activate()
         
-    def save_history(self, dir, name = None):
-        self.logger.write_log(dir, name)
+    def save_history(self):
+        return self.logger.write_log()
     
     def train(self, features, targets, batch_size = None, learning_rate = 0.01, epochs = 1, log_epochs = None):
         self.minibatch_size = batch_size  # None means batch GD. for stochastic, specify '1'.
