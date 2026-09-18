@@ -12,6 +12,10 @@ st.title("Neural Network from Scratch",
   text_alignment="center", 
   icon=":material/network_node:")
 
+if st.button("Reset Current Session"):
+    for key in st.session_state.keys():
+        del st.session_state[key]
+
 @st.cache_data
 def load_train():
   X_train, y_train = and_gate_dataset(100, 1)
@@ -49,13 +53,14 @@ activation_functions = {
 }
 
 st.header("Model")
-st.subheader("Add Layers")
+st.subheader("Add Hidden Layers")
 col1, col2, col3, col4 = st.columns(4)
 
 if "model" not in st.session_state:
     st.session_state.model = Model(BinaryLoss(), 1)
     st.session_state.model.add_layer(Layer(2, activation_functions["None"][0], activation_functions["None"][1]))
     st.session_state.model.add_layer(Layer(1, activation_functions["Sigmoid"][0], activation_functions["Sigmoid"][1]))
+    st.session_state.model_compiled = False
   
 if "activations" not in st.session_state:
     st.session_state.activations = list()
@@ -91,6 +96,7 @@ st.dataframe(layers, hide_index=True)
 
 if st.button("Compile Model"):
   model.compile()
+  st.session_state.model_compiled = True
   st.success("Model compiled!")
 
 show_weights_biases = st.checkbox("Show Weights and Biases")
@@ -109,11 +115,11 @@ if show_weights_biases:
   # display
   for i in range(len(weights)):
     st.write(f"Layer {i+1} Biases:")
-    biases[i]
+    st.write(biases[i])
     st.write(f"Next Weights:")
-    weights[i]
+    st.write(weights[i])
   st.write(f"Layer {len(weights)+1} Biases:")
-  biases[-1]
+  st.write(biases[-1])
 
 # PREP PLOTTING
 from nn.plotter import Plotter
@@ -196,6 +202,10 @@ if 'history' not in st.session_state:
   st.session_state.history = None
 
 if st.button("Train Model"):
+  if not st.session_state.model_compiled:
+    st.error("Please compile the model first.")
+    st.stop()
+
   with st.spinner("Training in progress..."):
     trainer.train(X_train, y_train, batch_size, learning_rate, epochs = epochs)
 
@@ -206,35 +216,36 @@ if st.button("Train Model"):
 st.header("Training History")
 
 if st.button("Plot History"):
-  with st.spinner("Reading log file..."):
-    if st.session_state.history is None:
-      st.error("No training history found. Please train the model first.")
-      st.stop()  # stop further execution if no history is found
+  if st.session_state.history is None:
+    st.error("No training history found. Please train the model first.")
+    st.stop()
+
+  with st.spinner("Reading training history..."):
     st.session_state.data = load_history(st.session_state.history)
 
   with st.spinner("Plotting gradients..."):
     gradient_path = plot_gradients(st.session_state.history)
     st.subheader("Gradients")
-    st.image(gradient_path, use_container_width=True)
+    st.image(gradient_path, width='stretch')
 
   with st.spinner("Plotting weights..."):
     weight_path = plot_weights(st.session_state.history)
     st.subheader("Weights")
-    st.image(weight_path, use_container_width=True)
+    st.image(weight_path, width='stretch')
 
   with st.spinner("Plotting accuracy..."):
     score_path = plot_score(st.session_state.history)
     st.subheader("Accuracy")
-    st.image(score_path, use_container_width=True)
+    st.image(score_path, width='stretch')
 
   with st.spinner("Plotting outputs..."):
     prediction_path = plot_predictions(st.session_state.history, X_train)
     st.subheader("Predictions")
-    st.image(prediction_path, use_container_width=True)
+    st.image(prediction_path, width='stretch')
 
   with st.spinner("Plotting loss landscape (this takes a while)..."):
     loss_landscape_path = plot_loss_landscape(st.session_state.history, trainer, X_train, y_train)
     st.subheader("Loss Landscape")
-    st.image(loss_landscape_path, use_container_width=True)
+    st.image(loss_landscape_path, width='stretch')
 
   st.success("Plots generated!")
