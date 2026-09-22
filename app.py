@@ -29,7 +29,7 @@ def load_test():
   return dataset
 
 # DATASET
-from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes
+from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data
 
 st.header("Dataset")
 
@@ -42,23 +42,34 @@ if dataset_option == "Upload a Dataset":
     st.dataframe(dataset)
     st.subheader("Preprocess Dataset")
 
-    # 1. first one-hot encode categorical columns if any
-    dataset = pd.get_dummies(dataset, drop_first=True, dtype=int)
-
     # 1. Select the target column and its type
     target_column = st.selectbox("Select the target column", dataset.columns)
     target_type = st.selectbox("Select the target type", ["regression", "classification"])
 
+    # 2. select columns to one-hot encode
+    one_hot_columns = st.multiselect("Select columns to one-hot encode", dataset.columns)
+    if st.button("Apply One-Hot Encoding"):
+      if one_hot_columns:
+          dataset = pd.get_dummies(dataset, columns=one_hot_columns, drop_first=True, dtype=int)
+          st.success("One-hot encoding applied!")
+    
+    # 3. split into train, test sets
     if target_type == "classification":
-      # 1. split train, test sets.
-      train_set, test_set = split_classes(dataset, target_column)
+      train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
+    elif target_type == "regression":
+      train_set, test_set = split_data(dataset)
 
-      # 2. extract features and labels for train and test sets
+    # 4. select columns to standardize, maybe including target
+    standardize_columns = st.multiselect("Select columns to standardize", dataset.columns)
+    if st.button("Apply Standardization"):
+      if standardize_columns:
+        X_means, X_stds = standardize_data(train_set[standardize_columns])
+        standardize_data(test_set[standardize_columns], from_means=X_means, from_stds=X_stds)
+        st.success("Standardization applied!")
+
+    # 5. extract features and labels for train and test sets
       X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
-
-    # float and int columns - perform standardization
-    X_means, X_stds = standardize_data(train_dataset.select_dtypes(include=["float", "int"]))
   
 elif dataset_option == "AND Gate (Built-in)":
   st.subheader("Training set")
@@ -68,6 +79,13 @@ elif dataset_option == "AND Gate (Built-in)":
   st.subheader("Testing set")
   test_data = load_test()
   st.dataframe(test_data)
+
+  # Extract features and targets for train and test sets
+  X_train, y_train = train_data.iloc[:, :-1].values, train_data.iloc[:, -1].values
+  y_train = y_train.reshape(y_train.shape[0], 1)  # reshape to column vector
+
+  X_test, y_test = test_data.iloc[:, :-1].values, test_data.iloc[:, -1].values
+  y_test = y_test.reshape(y_test.shape[0], 1)  # reshape to column vector
 
 # MODEL
 from nn.model_classes import Model, Layer
@@ -218,8 +236,6 @@ from nn.optimizers import SGD
 st.header("Training")
 
 trainer = Trainer(model, SGD())
-X_train, y_train = train_data.iloc[:, :-1].values, train_data.iloc[:, -1].values
-y_train = y_train.reshape(y_train.shape[0], 1)  # reshape to column vector
 
 # input fields for training
 batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
