@@ -12,7 +12,7 @@ st.title("Neural Network from Scratch",
   text_alignment="center", 
   icon=":material/network_node:")
 
-if st.button("Reset Current Session"):
+if st.button("Reset Current Session", type="primary"):
     for key in st.session_state.keys():
         del st.session_state[key]
 
@@ -29,17 +29,45 @@ def load_test():
   return dataset
 
 # DATASET
-from nn.dataset_utils import and_gate_dataset
+from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes
 
-st.header("AND gate dataset")
+st.header("Dataset")
 
-st.subheader("Training set")
-train_data = load_train()
-st.dataframe(train_data)
+dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
-st.subheader("Testing set")
-test_data = load_test()
-st.dataframe(test_data)
+if dataset_option == "Upload a Dataset":
+  uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+  if uploaded_file is not None:
+    dataset = pd.read_csv(uploaded_file)
+    st.dataframe(dataset)
+    st.subheader("Preprocess Dataset")
+
+    # 1. first one-hot encode categorical columns if any
+    dataset = pd.get_dummies(dataset, drop_first=True, dtype=int)
+
+    # 1. Select the target column and its type
+    target_column = st.selectbox("Select the target column", dataset.columns)
+    target_type = st.selectbox("Select the target type", ["regression", "classification"])
+
+    if target_type == "classification":
+      # 1. split train, test sets.
+      train_set, test_set = split_classes(dataset, target_column)
+
+      # 2. extract features and labels for train and test sets
+      X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
+      X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
+
+    # float and int columns - perform standardization
+    X_means, X_stds = standardize_data(train_dataset.select_dtypes(include=["float", "int"]))
+  
+elif dataset_option == "AND Gate (Built-in)":
+  st.subheader("Training set")
+  train_data = load_train()
+  st.dataframe(train_data)
+
+  st.subheader("Testing set")
+  test_data = load_test()
+  st.dataframe(test_data)
 
 # MODEL
 from nn.model_classes import Model, Layer
