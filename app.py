@@ -13,8 +13,8 @@ st.title("Neural Network from Scratch",
   icon=":material/network_node:")
 
 if st.button("Reset Current Session", type="primary"):
-    for key in st.session_state.keys():
-        del st.session_state[key]
+  for key in st.session_state.keys():
+    del st.session_state[key]
 
 @st.cache_data
 def load_train():
@@ -42,32 +42,39 @@ if dataset_option == "Upload a Dataset":
     st.dataframe(dataset)
     st.subheader("Preprocess Dataset")
 
-    # 1. Select the target column and its type
-    target_column = st.selectbox("Select the target column", dataset.columns)
-    target_type = st.selectbox("Select the target type", ["regression", "classification"])
+    with st.form("preprocess_form"):  # separate re-runs based UI from logic
+      # 1. Select the target column and its type
+      target_column = st.selectbox("Select the target column", dataset.columns)
+      target_type = st.selectbox("Select the target type", ["regression", "classification"])
 
-    # 2. select columns to one-hot encode
-    one_hot_columns = st.multiselect("Select columns to one-hot encode", dataset.columns)
-    if st.button("Apply One-Hot Encoding"):
+      # 2. select columns to one-hot encode
+      one_hot_columns = st.multiselect("Select columns to one-hot encode", dataset.columns)
+
+      # 3. select columns to standardize, maybe including target
+      standardize_columns = st.multiselect("Select columns to standardize", dataset.columns)
+
+      # 4. submit button
+      submitted = st.form_submit_button("Apply Preprocessing")
+
+    if submitted:
+      # 1. Apply one-hot encoding
       if one_hot_columns:
           dataset = pd.get_dummies(dataset, columns=one_hot_columns, drop_first=True, dtype=int)
           st.success("One-hot encoding applied!")
-    
-    # 3. split into train, test sets
-    if target_type == "classification":
-      train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
-    elif target_type == "regression":
-      train_set, test_set = split_data(dataset)
 
-    # 4. select columns to standardize, maybe including target
-    standardize_columns = st.multiselect("Select columns to standardize", dataset.columns)
-    if st.button("Apply Standardization"):
+      # 2. Split into train and test sets
+      if target_type == "classification":
+        train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
+      elif target_type == "regression":
+        train_set, test_set = split_data(dataset)
+
+      # 3. Standardize selected columns
       if standardize_columns:
         X_means, X_stds = standardize_data(train_set[standardize_columns])
         standardize_data(test_set[standardize_columns], from_means=X_means, from_stds=X_stds)
         st.success("Standardization applied!")
 
-    # 5. extract features and labels for train and test sets
+      # 4. extract features and labels for train and test sets
       X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
   

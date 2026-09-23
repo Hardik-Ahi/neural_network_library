@@ -38,16 +38,10 @@ def make_standard(x, mean, std):
     return (x - mean) / std
 
 def standardize_data(dataframe, from_means = None, from_stds = None):  # in-place operation
-    means = list()
-    stds = list()
-    from_counter = 0
-    for col in dataframe.columns:
-        mean = np.mean(dataframe[col]) if from_means is None else from_means[from_counter]
-        std = np.std(dataframe[col]) if from_stds is None else from_stds[from_counter]
-        dataframe[col] = (dataframe[col] - mean) / std
-        means.append(mean)
-        stds.append(std)
-        from_counter += 1
+    dataframe = dataframe.astype(float)
+    means = dataframe.mean() if from_means is None else from_means
+    stds = dataframe.std() if from_stds is None else from_stds
+    dataframe.loc[:, dataframe.columns] = (dataframe[dataframe.columns] - means) / stds
     return means, stds
     
 
