@@ -37,11 +37,12 @@ def get_minibatch(features, targets, batch_size = 1, start_at = 0):
 def make_standard(x, mean, std):
     return (x - mean) / std
 
-def standardize_data(dataframe, from_means = None, from_stds = None):  # in-place operation
-    dataframe = dataframe.astype(float)
-    means = dataframe.mean() if from_means is None else from_means
-    stds = dataframe.std() if from_stds is None else from_stds
-    dataframe.loc[:, dataframe.columns] = (dataframe[dataframe.columns] - means) / stds
+def standardize_data(dataframe, columns, from_means = None, from_stds = None):  # in-place operation
+    for col in columns:
+        dataframe[col] = dataframe[col].astype(float)
+    means = dataframe[columns].mean() if from_means is None else from_means
+    stds = dataframe[columns].std() if from_stds is None else from_stds
+    dataframe.loc[:, columns] = (dataframe[columns] - means) / stds
     return means, stds
     
 

@@ -34,6 +34,12 @@ from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, 
 st.header("Dataset")
 
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
+if 'target_type' not in st.session_state:
+  st.session_state.target_type = "classification"  # for AND gate
+
+if 'dataset' not in st.session_state:
+  st.session_state.train_set = None
+  st.session_state.test_set = None
 
 if dataset_option == "Upload a Dataset":
   uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -57,6 +63,9 @@ if dataset_option == "Upload a Dataset":
       submitted = st.form_submit_button("Apply Preprocessing")
 
     if submitted:
+      # 0. Store target type for further use
+      st.session_state.target_type = target_type
+
       # 1. Apply one-hot encoding
       if one_hot_columns:
           dataset = pd.get_dummies(dataset, columns=one_hot_columns, drop_first=True, dtype=int)
@@ -67,11 +76,15 @@ if dataset_option == "Upload a Dataset":
         train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
       elif target_type == "regression":
         train_set, test_set = split_data(dataset)
+      
+      # 2.5 Store train and test sets in session state
+      st.session_state.train_set = train_set
+      st.session_state.test_set = test_set
 
       # 3. Standardize selected columns
       if standardize_columns:
-        X_means, X_stds = standardize_data(train_set[standardize_columns])
-        standardize_data(test_set[standardize_columns], from_means=X_means, from_stds=X_stds)
+        X_means, X_stds = standardize_data(train_set, standardize_columns)
+        standardize_data(test_set, standardize_columns, from_means=X_means, from_stds=X_stds)
         st.success("Standardization applied!")
 
       # 4. extract features and labels for train and test sets
@@ -79,20 +92,22 @@ if dataset_option == "Upload a Dataset":
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
   
 elif dataset_option == "AND Gate (Built-in)":
-  st.subheader("Training set")
-  train_data = load_train()
-  st.dataframe(train_data)
-
-  st.subheader("Testing set")
-  test_data = load_test()
-  st.dataframe(test_data)
+  st.session_state.train_set = load_train()
+  st.session_state.test_set = load_test()
 
   # Extract features and targets for train and test sets
-  X_train, y_train = train_data.iloc[:, :-1].values, train_data.iloc[:, -1].values
+  X_train, y_train = st.session_state.train_set.iloc[:, :-1].values, st.session_state.train_set.iloc[:, -1].values
   y_train = y_train.reshape(y_train.shape[0], 1)  # reshape to column vector
 
-  X_test, y_test = test_data.iloc[:, :-1].values, test_data.iloc[:, -1].values
+  X_test, y_test = st.session_state.test_set.iloc[:, :-1].values, st.session_state.test_set.iloc[:, -1].values
   y_test = y_test.reshape(y_test.shape[0], 1)  # reshape to column vector
+
+# show train and test sets globally
+st.subheader("Training Set")
+st.dataframe(st.session_state.train_set)
+
+st.subheader("Testing Set")
+st.dataframe(st.session_state.test_set)
 
 # MODEL
 from nn.model_classes import Model, Layer
@@ -111,14 +126,10 @@ col1, col2, col3, col4 = st.columns(4)
 
 if "model" not in st.session_state:
     st.session_state.model = Model(BinaryLoss(), 1)
-    st.session_state.model.add_layer(Layer(2, activation_functions["None"][0], activation_functions["None"][1]))
-    st.session_state.model.add_layer(Layer(1, activation_functions["Sigmoid"][0], activation_functions["Sigmoid"][1]))
     st.session_state.model_compiled = False
   
 if "activations" not in st.session_state:
     st.session_state.activations = list()
-    st.session_state.activations.append("None")
-    st.session_state.activations.append("Sigmoid")
 
 model = st.session_state.model
 activations = st.session_state.activations
@@ -237,12 +248,15 @@ def plot_loss_landscape(string, _trainer, _X_train, _y_train):
   return image_bytes
 
 # TRAIN
-from nn.trainer import Trainer
+from nn.trainer import Trainer, RegressionTrainer
 from nn.optimizers import SGD
 
 st.header("Training")
 
-trainer = Trainer(model, SGD())
+if st.session_state.target_type == "classification":
+  trainer = Trainer(model, SGD())
+elif st.session_state.target_type == "regression":
+  trainer = RegressionTrainer(model, SGD())
 
 # input fields for training
 batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
