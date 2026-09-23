@@ -37,9 +37,11 @@ dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload 
 if 'target_type' not in st.session_state:
   st.session_state.target_type = "classification"  # for AND gate
 
-if 'dataset' not in st.session_state:
+if 'train_set' not in st.session_state:
   st.session_state.train_set = None
   st.session_state.test_set = None
+  st.session_state.X_y_train = []
+  st.session_state.X_y_test = []
 
 if dataset_option == "Upload a Dataset":
   uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -89,7 +91,9 @@ if dataset_option == "Upload a Dataset":
 
       # 4. extract features and labels for train and test sets
       X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
+      st.session_state.X_y_train = [X_train, y_train]
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
+      st.session_state.X_y_test = [X_test, y_test]
   
 elif dataset_option == "AND Gate (Built-in)":
   st.session_state.train_set = load_train()
@@ -98,9 +102,11 @@ elif dataset_option == "AND Gate (Built-in)":
   # Extract features and targets for train and test sets
   X_train, y_train = st.session_state.train_set.iloc[:, :-1].values, st.session_state.train_set.iloc[:, -1].values
   y_train = y_train.reshape(y_train.shape[0], 1)  # reshape to column vector
+  st.session_state.X_y_train = [X_train, y_train]
 
   X_test, y_test = st.session_state.test_set.iloc[:, :-1].values, st.session_state.test_set.iloc[:, -1].values
   y_test = y_test.reshape(y_test.shape[0], 1)  # reshape to column vector
+  st.session_state.X_y_test = [X_test, y_test]
 
 # show train and test sets globally
 st.subheader("Training Set")
@@ -121,8 +127,7 @@ activation_functions = {
 }
 
 st.header("Model")
-st.subheader("Add Hidden Layers")
-col1, col2, col3, col4 = st.columns(4)
+st.subheader("Add Layers")
 
 if "model" not in st.session_state:
     st.session_state.model = Model(BinaryLoss(), 1)
@@ -134,20 +139,24 @@ if "activations" not in st.session_state:
 model = st.session_state.model
 activations = st.session_state.activations
 
-with col1:
-  layer_number = st.number_input(f"Layer number", disabled=True, value=len(model.layers))
+with st.form("add layers"):
+  col1, col2, col3, col4 = st.columns(4)
+  with col1:
+    layer_number = st.number_input(f"Layer number", disabled=True, value=len(model.layers)+1)
 
-with col2:
-  n_neurons = st.number_input("Number of Neurons", min_value=1, max_value=10, value=2, step=1)
+  with col2:
+    n_neurons = st.number_input("Number of Neurons", min_value=1, max_value=10, value=2, step=1)
 
-with col3:
-  activation_function = st.selectbox("Activation Function", list(activation_functions.keys()))
+  with col3:
+    activation_function = st.selectbox("Activation Function", list(activation_functions.keys()))
 
-with col4:
-  if st.button("Add Layer", help="Add a new HIDDEN layer to the model (between input and output layers)"):
-    model.add_layer(Layer(n_neurons, activation_functions[activation_function][0], activation_functions[activation_function][1]), index=-1)
-    activations.insert(-1, activation_function)
-    st.success(f"Layer {layer_number} added!")
+  with col4:
+    submitted = st.form_submit_button("Add Layer", help="Add a new layer to the model")
+
+if submitted:
+  model.add_layer(Layer(n_neurons, activation_functions[activation_function][0], activation_functions[activation_function][1]))
+  activations.append(activation_function)
+  st.success(f"Layer {layer_number} added!")
 
 # Display model layers as table
 st.subheader("Model Summary")
@@ -272,6 +281,10 @@ if st.button("Train Model"):
     st.stop()
 
   with st.spinner("Training in progress..."):
+    if st.session_state.X_y_train is None:
+      st.error("No training data found. Please load the dataset first.")
+      st.stop()
+    X_train, y_train = st.session_state.X_y_train
     trainer.train(X_train, y_train, batch_size, learning_rate, epochs = epochs)
 
   st.success("Training completed!")
@@ -284,6 +297,8 @@ if st.button("Plot History"):
   if st.session_state.history is None:
     st.error("No training history found. Please train the model first.")
     st.stop()
+
+  X_train, y_train = st.session_state.X_y_train
 
   with st.spinner("Reading training history..."):
     st.session_state.data = load_history(st.session_state.history)
