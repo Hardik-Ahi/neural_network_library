@@ -30,12 +30,14 @@ def load_test():
 
 # DATASET
 from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data
+from nn.model_classes import Model
+from nn.functions import MSE, BinaryLoss
 
 st.header("Dataset")
 
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 if 'target_type' not in st.session_state:
-  st.session_state.target_type = "classification"  # for AND gate
+  st.session_state.target_type = None
 
 if 'train_set' not in st.session_state:
   st.session_state.train_set = None
@@ -75,9 +77,15 @@ if dataset_option == "Upload a Dataset":
 
       # 2. Split into train and test sets
       if target_type == "classification":
+        print("using classification target")
         train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
+        st.session_state.model = Model(BinaryLoss(), 1)
       elif target_type == "regression":
+        print("using regression target")
         train_set, test_set = split_data(dataset)
+        st.session_state.model = Model(MSE(), 1)
+      
+      st.session_state.model_compiled = False
       
       # 2.5 Store train and test sets in session state
       st.session_state.train_set = train_set
@@ -91,11 +99,12 @@ if dataset_option == "Upload a Dataset":
 
       # 4. extract features and labels for train and test sets
       X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
-      st.session_state.X_y_train = [X_train, y_train]
+      st.session_state.X_y_train = [X_train.to_numpy(), y_train.to_numpy().reshape(-1, 1)]
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
-      st.session_state.X_y_test = [X_test, y_test]
+      st.session_state.X_y_test = [X_test.to_numpy(), y_test.to_numpy().reshape(-1, 1)]
   
 elif dataset_option == "AND Gate (Built-in)":
+  st.session_state.target_type = "classification"
   st.session_state.train_set = load_train()
   st.session_state.test_set = load_test()
 
@@ -117,24 +126,24 @@ st.dataframe(st.session_state.test_set)
 
 # MODEL
 from nn.model_classes import Model, Layer
-from nn.functions import BinaryLoss, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu
+from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu, mirror, der_mirror
 
 activation_functions = {
     "None": [None, None],
     "ReLU": [relu, der_relu],
     "Leaky ReLU": [leaky_relu(), der_leaky_relu()],
-    "Sigmoid": [sigmoid, der_sigmoid]
+    "Sigmoid": [sigmoid, der_sigmoid],
+    "Linear": [mirror, der_mirror]
 }
 
 st.header("Model")
 st.subheader("Add Layers")
-
-if "model" not in st.session_state:
-    st.session_state.model = Model(BinaryLoss(), 1)
-    st.session_state.model_compiled = False
   
 if "activations" not in st.session_state:
     st.session_state.activations = list()
+
+if 'model' not in st.session_state:
+  st.stop()  # just stop further execution
 
 model = st.session_state.model
 activations = st.session_state.activations
@@ -170,6 +179,8 @@ st.dataframe(layers, hide_index=True)
 if st.button("Compile Model"):
   model.compile()
   st.session_state.model_compiled = True
+  print("Any NaNs in X?", np.isnan(st.session_state.X_y_train[0]).any())
+  print("Any NaNs in y?", np.isnan(st.session_state.X_y_train[1]).any())
   st.success("Model compiled!")
 
 show_weights_biases = st.checkbox("Show Weights and Biases")
@@ -268,14 +279,14 @@ elif st.session_state.target_type == "regression":
   trainer = RegressionTrainer(model, SGD())
 
 # input fields for training
-batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
-learning_rate = st.number_input("Learning Rate (0.001 - 1.0)", min_value=0.001, max_value=1.0, value=0.02, step=0.001, format="%.3f")
-epochs = st.number_input("Epochs (1 - 500)", min_value=1, max_value=500, value=120, step=1)
+with st.form("training_form"):
+  batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
+  learning_rate = st.number_input("Learning Rate (0.001 - 1.0)", min_value=0.001, max_value=1.0, value=0.02, step=0.001, format="%.3f")
+  epochs = st.number_input("Epochs (1 - 500)", min_value=1, max_value=500, value=25, step=1)
 
-if 'history' not in st.session_state:
-  st.session_state.history = None
+  submitted = st.form_submit_button("Train Model")
 
-if st.button("Train Model"):
+if submitted:
   if not st.session_state.model_compiled:
     st.error("Please compile the model first.")
     st.stop()
@@ -289,6 +300,9 @@ if st.button("Train Model"):
 
   st.success("Training completed!")
   st.session_state.history = trainer.save_history()
+
+if 'history' not in st.session_state:
+  st.session_state.history = None
 
 # PLOT
 st.header("Training History")

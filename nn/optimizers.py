@@ -18,9 +18,21 @@ class SGD():
         return self.model.loss.error_output_layer(self.model.layers[-1], label)
 
     def error_layer(self, this_index, weight_index):  # weights connecting this layer to next layer
+        '''
+        print("Weights transposed shape:", np.transpose(self.model.weights[weight_index].matrix).shape)
+        print("Next layer delta shape:", self.model.layers[this_index+1].del_.shape)
+
         return np.matmul(
             np.transpose(self.model.weights[weight_index].matrix),
             self.model.layers[this_index+1].del_) * self.model.layers[this_index].der_activate()
+        '''
+        w = np.transpose(self.model.weights[weight_index].matrix)
+        d = self.model.layers[this_index+1].del_
+        der = self.model.layers[this_index].der_activate()
+        
+        # print(f"Max W: {np.max(np.abs(w)):.4e} | Max Delta: {np.max(np.abs(d)):.4e} | Max Der: {np.max(np.abs(der)):.4e}")
+        
+        return np.matmul(w, d) * der
         
     def on_pass(self):
         # reset gradients

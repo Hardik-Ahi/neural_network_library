@@ -52,7 +52,8 @@ def softmax(layer):
 class MSE:
     def calculate_loss(self, labels, predictions):
         labels = labels.reshape(predictions.shape)
-        return (1 / labels.size) * np.sum((labels - predictions)**2)
+        loss = (1 / labels.size) * np.sum((labels - predictions)**2)
+        return loss
     
     def der_loss(self, label, output):
         return 2 * (output - label)
@@ -60,7 +61,8 @@ class MSE:
     def error_output_layer(self, layer, label):
         first_term = self.der_loss(label, layer.a_[0][0])
         second_term = layer.der_activate()
-        return first_term * second_term
+        error = np.clip(first_term * second_term, -5, 5)
+        return error
 
 class BinaryLoss(MSE):
     def calculate_loss(self, labels, predictions, epsilon = 1e-7):
