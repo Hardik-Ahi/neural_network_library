@@ -100,20 +100,17 @@ def split_data(dataframe, test_size = 0.2, seed = 1):
 
     return train_df, test_df
 
-def pca(dataframe, target_name, n_components = 2):  # assume all features are valid (continuous numeric) for pca
-    if target_name not in dataframe.columns:
-        print(f'invalid target name: {target_name}')
+def pca(features, n_components = 2):  # assume all features are valid (continuous numeric) for pca
+    if features.shape[1] == 0:
+        print(f'no features provided')
         return
-    features = dataframe.drop(columns = [target_name])
 
-    # 1. standardize vars
-    for col in features.columns:
-        mean = features[col].mean()
-        std = features[col].std()
-        features[col] = (features[col] - mean)/std
+    # 1. standardize vars, features is a 2D NumPy array
+    mean = features.mean(axis=0)
+    std = features.std(axis=0)
+    array = (features - mean) / std
     
     # 2. covariance matrix
-    array = features.to_numpy()
     matrix = np.cov(array, rowvar = False)
     
     # 3. eigenvalues, eigenvectors

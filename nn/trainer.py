@@ -69,11 +69,11 @@ class Trainer:
                 real_features, real_targets = get_minibatch(features, targets, self.minibatch_size, start_index)
                 real_targets = real_targets.reshape((real_targets.size,))
                 self.batch_size = real_features.shape[0]  # real batch size for correctly normalizing gradients for accumulation
-                print(f"model biases: {[layer.b_ for layer in self.model.layers]}")
+                #print(f"model biases: {[layer.b_ for layer in self.model.layers]}")
                 for i in range(real_features.shape[0]):
                     self.forward_pass(real_features[i])
-                    print(f'predictions: {self.model.layers[-1].a_}')
-                    print(f'target: {real_targets[i]}')
+                    #print(f'predictions: {self.model.layers[-1].a_}')
+                    #print(f'target: {real_targets[i]}')
                     self.backward_pass(real_targets[i])
 
                 self.logger.log_updates_init(batch)

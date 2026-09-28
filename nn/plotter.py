@@ -266,7 +266,7 @@ class Plotter:
 
         return fig
 
-    def plot_regression(self, data, features, targets, predictions = None, x_label = None):
+    def plot_regression(self, data, features, targets, predictions = None, x_label = "PCA Component-1"):
         features = features.reshape((features.shape[0], 1))
         targets = targets.reshape((targets.shape[0], 1))
         prediction_size = 15

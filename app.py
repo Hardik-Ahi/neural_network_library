@@ -208,6 +208,7 @@ if show_weights_biases:
 # PREP PLOTTING
 from nn.plotter import Plotter
 from nn.trainer import Logger
+from nn.dataset_utils import pca
 import io
 
 if 'plotter' not in st.session_state:
@@ -242,7 +243,7 @@ def plot_weights(string):
 
 @st.cache_data
 def plot_score(string):
-  score = plotter.plot_score(st.session_state.data, n_points=700)
+  score = plotter.plot_score(st.session_state.data, n_points=700, confusion_matrix=(st.session_state.target_type == "classification"))
   buf = io.BytesIO()
   score.savefig(buf, format="png", bbox_inches="tight")
   buf.seek(0)
@@ -250,10 +251,20 @@ def plot_score(string):
   return image_bytes
 
 @st.cache_data
-def plot_predictions(string, _X_train):  # _ underscore means skip hashing on this key
+def plot_and_gate_predictions(string, _X_train):  # _ underscore means skip hashing on this key
   predictions = plotter.plot_predictions(st.session_state.data, _X_train)
   buf = io.BytesIO()
   predictions.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
+
+@st.cache_data
+def plot_regression(string):
+  axis = pca(st.session_state.X_y_train[0], n_components=1)
+  regression = plotter.plot_regression(st.session_state.data, axis, st.session_state.X_y_train[1])
+  buf = io.BytesIO()
+  regression.savefig(buf, format="png", bbox_inches="tight")
   buf.seek(0)
   image_bytes = buf.getvalue()
   return image_bytes
@@ -333,9 +344,12 @@ if st.button("Plot History"):
     st.image(score_path, width='stretch')
 
   with st.spinner("Plotting outputs..."):
-    prediction_path = plot_predictions(st.session_state.history, X_train)
+    if st.session_state.target_type == 'regression':
+      predictions = plot_regression(st.session_state.history)
+    elif st.session_state.target_type == 'classification':
+      predictions = plot_predictions(st.session_state.history, X_train)  # just AND gate for now
     st.subheader("Predictions")
-    st.image(prediction_path, width='stretch')
+    st.image(predictions, width='stretch')
 
   with st.spinner("Plotting loss landscape (this takes a while)..."):
     loss_landscape_path = plot_loss_landscape(st.session_state.history, trainer, X_train, y_train)
