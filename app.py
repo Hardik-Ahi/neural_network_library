@@ -3,16 +3,12 @@ import numpy as np
 import pandas as pd
 import io
 
-from nn.trainer import Trainer, RegressionTrainer
+from nn.trainer import Trainer, RegressionTrainer, Logger
 from nn.optimizers import SGD
-from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data
-from nn.model_classes import Model
-from nn.functions import MSE, BinaryLoss
+from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data, pca
 from nn.model_classes import Model, Layer
 from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu, mirror, der_mirror
 from nn.plotter import Plotter
-from nn.trainer import Logger
-from nn.dataset_utils import pca
 
 # STREAMLIT CONFIG
 st.set_page_config(page_title="Neural Network Demonstration", layout="wide" )
@@ -37,7 +33,7 @@ if 'X_y_train' not in st.session_state:
 if 'X_y_test' not in st.session_state:
   st.session_state.X_y_test = []
 if 'activations' not in st.session_state:
-  st.session_state.activations = list()
+  st.session_state.activations = []
 if 'plotter' not in st.session_state:
   st.session_state.plotter = Plotter()
 if 'data' not in st.session_state:
@@ -58,6 +54,7 @@ activation_functions = {
 }
 
 # DATASET
+'''
 @st.cache_data
 def load_train():
   X_train, y_train = and_gate_dataset(100, 1)
@@ -69,31 +66,57 @@ def load_test():
   X_test, y_test = and_gate_dataset(50, 2)
   dataset = pd.DataFrame(np.hstack((X_test, y_test)), columns=["Input 1", "Input 2", "Output"])
   return dataset
+'''
+
+def preprocess_dataset():
+  raw_data = pd.read_csv(st.session_state.uploaded_dataset)
+  raw_data = raw_data.dropna(ignore_index=True)
+  
+  target_col = st.session_state.form_target_col
+  target_type = st.session_state.form_target_type
+
+  if st.session_state.form_one_hot_columns:
+    raw_data = pd.get_dummies(raw_data, columns=st.session_state.form_one_hot_columns, drop_first=True, dtype=int)
+
+  if target_type == "classification":
+    train_set, test_set = split_classes(raw_data, target_col)
+    st.session_state.model = Model(BinaryLoss(), 1)
+    st.session_state.trainer = Trainer(st.session_state.model, SGD())
+  else:
+    train_set, test_set = split_data(raw_data)
+    st.session_state.model = Model(MSE(), 1)
+    st.session_state.trainer = RegressionTrainer(st.session_state.model, SGD())
+  
+  if st.session_state.form_standardize_columns:
+    X_means, X_stds = standardize_data(train_set, st.session_state.form_standardize_columns)
+    standardize_data(test_set, st.session_state.form_standardize_columns, from_means=X_means, from_stds=X_stds)
+
+  st.session_state.train_set = train_set
+  st.session_state.test_set = test_set
+  st.session_state.model_compiled = False
+
+  X_train, y_train = train_set.drop(columns=[target_col]), train_set[target_col]
+  st.session_state.X_y_train = [X_train.to_numpy(), y_train.to_numpy().reshape(-1, 1)]
+  X_test, y_test = test_set.drop(columns=[target_col]), test_set[target_col]
+  st.session_state.X_y_test = [X_test.to_numpy(), y_test.to_numpy().reshape(-1, 1)]
 
 st.header("Dataset")
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
 if dataset_option == "Upload a Dataset":
-  uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
+  uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="uploaded_dataset")
   if uploaded_file is not None:
     dataset = pd.read_csv(uploaded_file)
     st.dataframe(dataset)
     st.subheader("Preprocess Dataset")
 
     with st.form("preprocess_form"):  # separate re-runs based UI from logic
-      # 1. Select the target column and its type
-      target_column = st.selectbox("Select the target column", dataset.columns)
-      target_type = st.selectbox("Select the target type", ["regression", "classification"])
-
-      # 2. select columns to one-hot encode
-      one_hot_columns = st.multiselect("Select columns to one-hot encode", dataset.columns)
-
-      # 3. select columns to standardize, maybe including target
-      standardize_columns = st.multiselect("Select columns to standardize", dataset.columns)
-
-      # 4. submit button
-      submitted = st.form_submit_button("Apply Preprocessing")
-
+      st.selectbox("Select the target column", dataset.columns, key="form_target_column")
+      st.selectbox("Select the target type", ["regression", "classification"], key="form_target_type")
+      st.multiselect("Select columns to one-hot encode", dataset.columns, key="form_one_hot_columns")
+      st.multiselect("Select columns to standardize", dataset.columns, key="form_standardize_columns")
+      st.form_submit_button("Apply Preprocessing", on_click=preprocess_dataset)
+    '''
     if submitted:
       # 0. Store target type for further use
       st.session_state.target_type = target_type
@@ -134,24 +157,23 @@ if dataset_option == "Upload a Dataset":
       st.session_state.X_y_train = [X_train.to_numpy(), y_train.to_numpy().reshape(-1, 1)]
       X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
       st.session_state.X_y_test = [X_test.to_numpy(), y_test.to_numpy().reshape(-1, 1)]
-  
+      '''
 elif dataset_option == "AND Gate (Built-in)":
-  st.session_state.target_type = "classification"
-  st.session_state.target_name = "Output"
-  st.session_state.train_set = load_train()
-  st.session_state.test_set = load_test()
-
-  # Extract features and targets for train and test sets
-  X_train, y_train = st.session_state.train_set.iloc[:, :-1].values, st.session_state.train_set.iloc[:, -1].values
-  y_train = y_train.reshape(y_train.shape[0], 1)  # reshape to column vector
-  st.session_state.X_y_train = [X_train, y_train]
-
-  X_test, y_test = st.session_state.test_set.iloc[:, :-1].values, st.session_state.test_set.iloc[:, -1].values
-  y_test = y_test.reshape(y_test.shape[0], 1)  # reshape to column vector
-  st.session_state.X_y_test = [X_test, y_test]
-
-  st.session_state.model = Model(BinaryLoss(), 1)
-  st.session_state.model_compiled = False
+  if st.session_state.train_set is None or st.session_state.target_name != "Output":
+    X_train, y_train = and_gate_dataset(100, 1)
+    st.session_state.train_set = pd.DataFrame(np.hstack((X_train, y_train)), columns=["Input 1", "Input 2", "Output"])
+    
+    X_test, y_test = and_gate_dataset(50, 2)
+    st.session_state.test_set = pd.DataFrame(np.hstack((X_test, y_test)), columns=["Input 1", "Input 2", "Output"])
+    
+    st.session_state.target_type = "classification"
+    st.session_state.target_name = "Output"
+    
+    st.session_state.X_y_train = [X_train, y_train.reshape(-1, 1)]
+    st.session_state.X_y_test = [X_test, y_test.reshape(-1, 1)]
+    st.session_state.model = Model(BinaryLoss(), 1)
+    st.session_state.trainer = Trainer(st.session_state.model, SGD())
+    st.session_state.model_compiled = False
 
 # DISPLAY TRAIN, TEST SETS
 if st.session_state.train_set is None:
@@ -171,12 +193,18 @@ for title, dataset_part in [("Training Set", st.session_state.train_set), ("Test
 st.header("Model")
 st.subheader("Add Layers")
 
+def add_layer_callback():
+    n_neurons = st.session_state.form_neurons
+    activation = st.session_state.form_activation
+    st.session_state.model.add_layer(n_neurons)
+    st.session_state.activations.append(activation)
+
 with st.form("add_layers_form"):
     col1, col2, col3 = st.columns(3)
     with col1:
         st.number_input("Number of Neurons", min_value=1, max_value=20, value=1, step=1, key="form_neurons")
     with col2:
-        st.selectbox("Activation Function", list(activation_functions.keys()), key="form_activations")
+        st.selectbox("Activation Function", list(activation_functions.keys()), key="form_activation")
     with col3:
         st.form_submit_button("Add Layer", on_click=add_layer_callback)
 
