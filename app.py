@@ -12,9 +12,12 @@ st.title("Neural Network from Scratch",
   text_alignment="center", 
   icon=":material/network_node:")
 
-if st.button("Reset Current Session", type="primary"):
+def clear_session():
   for key in st.session_state.keys():
     del st.session_state[key]
+
+if st.button("Reset Current Session", type="primary"):
+  clear_session()
 
 @st.cache_data
 def load_train():
@@ -34,16 +37,17 @@ from nn.model_classes import Model
 from nn.functions import MSE, BinaryLoss
 
 st.header("Dataset")
-
-dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 if 'target_type' not in st.session_state:
   st.session_state.target_type = None
+  st.session_state.target_name = None
 
 if 'train_set' not in st.session_state:
   st.session_state.train_set = None
   st.session_state.test_set = None
   st.session_state.X_y_train = []
   st.session_state.X_y_test = []
+
+dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
 if dataset_option == "Upload a Dataset":
   uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
@@ -69,6 +73,10 @@ if dataset_option == "Upload a Dataset":
     if submitted:
       # 0. Store target type for further use
       st.session_state.target_type = target_type
+      st.session_state.target_name = target_column
+
+      # 0.5 Remove NA rows - silently
+      dataset = dataset.dropna(ignore_index=True)
 
       # 1. Apply one-hot encoding
       if one_hot_columns:
@@ -105,6 +113,7 @@ if dataset_option == "Upload a Dataset":
   
 elif dataset_option == "AND Gate (Built-in)":
   st.session_state.target_type = "classification"
+  st.session_state.target_name = "Output"
   st.session_state.train_set = load_train()
   st.session_state.test_set = load_test()
 
@@ -117,12 +126,30 @@ elif dataset_option == "AND Gate (Built-in)":
   y_test = y_test.reshape(y_test.shape[0], 1)  # reshape to column vector
   st.session_state.X_y_test = [X_test, y_test]
 
+  st.session_state.model = Model(BinaryLoss(), 1)
+  st.session_state.model_compiled = False
+
 # show train and test sets globally
+if st.session_state.train_set is None:
+  st.stop()
+
 st.subheader("Training Set")
-st.dataframe(st.session_state.train_set)
+train1, train2 = st.columns(2)
+with train1:
+  st.subheader("Features")
+  st.dataframe(st.session_state.train_set.drop(columns=[st.session_state.target_name]))
+with train2:
+  st.subheader("Target")
+  st.dataframe(st.session_state.train_set[[st.session_state.target_name]])
 
 st.subheader("Testing Set")
-st.dataframe(st.session_state.test_set)
+test1, test2 = st.columns(2)
+with test1:
+  st.subheader("Features")
+  st.dataframe(st.session_state.test_set.drop(columns=[st.session_state.target_name]))
+with test2:
+  st.subheader("Target")
+  st.dataframe(st.session_state.test_set[[st.session_state.target_name]])
 
 # MODEL
 from nn.model_classes import Model, Layer
@@ -141,9 +168,6 @@ st.subheader("Add Layers")
   
 if "activations" not in st.session_state:
     st.session_state.activations = list()
-
-if 'model' not in st.session_state:
-  st.stop()  # just stop further execution
 
 model = st.session_state.model
 activations = st.session_state.activations
@@ -347,7 +371,7 @@ if st.button("Plot History"):
     if st.session_state.target_type == 'regression':
       predictions = plot_regression(st.session_state.history)
     elif st.session_state.target_type == 'classification':
-      predictions = plot_predictions(st.session_state.history, X_train)  # just AND gate for now
+      predictions = plot_and_gate_predictions(st.session_state.history, X_train)  # just AND gate for now
     st.subheader("Predictions")
     st.image(predictions, width='stretch')
 
