@@ -15,14 +15,9 @@ from nn.trainer import Logger
 from nn.dataset_utils import pca
 
 # STREAMLIT CONFIG
-st.set_page_config(
-    page_title="Neural Network Demonstration",
-    layout="wide"  # Turns on wide mode to remove huge margins
-)
+st.set_page_config(page_title="Neural Network Demonstration", layout="wide" )
 
-st.title("Neural Network from Scratch", 
-  text_alignment="center", 
-  icon=":material/network_node:")
+st.title("Neural Network from Scratch", text_alignment="center", icon=":material/network_node:")
 
 # SESSION STATE
 if 'target_type' not in st.session_state:
@@ -53,6 +48,14 @@ if 'history' not in st.session_state:
 if st.button("Reset Current Session", type="primary"):
   for key in st.session_state.keys():
     del st.session_state[key]
+
+activation_functions = {
+    "None": [None, None],
+    "ReLU": [relu, der_relu],
+    "Leaky ReLU": [leaky_relu(), der_leaky_relu()],
+    "Sigmoid": [sigmoid, der_sigmoid],
+    "Linear": [mirror, der_mirror]
+}
 
 # DATASET
 @st.cache_data
@@ -150,103 +153,54 @@ elif dataset_option == "AND Gate (Built-in)":
   st.session_state.model = Model(BinaryLoss(), 1)
   st.session_state.model_compiled = False
 
-# show train and test sets globally
+# DISPLAY TRAIN, TEST SETS
 if st.session_state.train_set is None:
   st.stop()
 
-st.subheader("Training Set")
-train1, train2 = st.columns(2)
-with train1:
-  st.subheader("Features")
-  st.dataframe(st.session_state.train_set.drop(columns=[st.session_state.target_name]))
-with train2:
-  st.subheader("Target")
-  st.dataframe(st.session_state.train_set[[st.session_state.target_name]])
-
-st.subheader("Testing Set")
-test1, test2 = st.columns(2)
-with test1:
-  st.subheader("Features")
-  st.dataframe(st.session_state.test_set.drop(columns=[st.session_state.target_name]))
-with test2:
-  st.subheader("Target")
-  st.dataframe(st.session_state.test_set[[st.session_state.target_name]])
+for title, dataset_part in [("Training Set", st.session_state.train_set), ("Testing Set", st.session_state.test_set)]:
+  st.subheader(title)
+  col_f, col_t = st.columns(2)
+  with col_f:
+    st.caption("Features")
+    st.dataframe(dataset_part.drop(columns=[st.session_state.target_name]))
+  with col_t:
+    st.caption("Target")
+    st.dataframe(dataset_part[[st.session_state.target_name]])
 
 # MODEL
-
-activation_functions = {
-    "None": [None, None],
-    "ReLU": [relu, der_relu],
-    "Leaky ReLU": [leaky_relu(), der_leaky_relu()],
-    "Sigmoid": [sigmoid, der_sigmoid],
-    "Linear": [mirror, der_mirror]
-}
-
 st.header("Model")
 st.subheader("Add Layers")
 
-model = st.session_state.model
-activations = st.session_state.activations
+with st.form("add_layers_form"):
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.number_input("Number of Neurons", min_value=1, max_value=20, value=1, step=1, key="form_neurons")
+    with col2:
+        st.selectbox("Activation Function", list(activation_functions.keys()), key="form_activations")
+    with col3:
+        st.form_submit_button("Add Layer", on_click=add_layer_callback)
 
-with st.form("add layers"):
-  col1, col2, col3, col4 = st.columns(4)
-  with col1:
-    layer_number = st.number_input(f"Layer number", disabled=True, value=len(model.layers)+1)
-
-  with col2:
-    n_neurons = st.number_input("Number of Neurons", min_value=1, max_value=10, value=2, step=1)
-
-  with col3:
-    activation_function = st.selectbox("Activation Function", list(activation_functions.keys()))
-
-  with col4:
-    submitted = st.form_submit_button("Add Layer", help="Add a new layer to the model")
-
-if submitted:
-  model.add_layer(Layer(n_neurons, activation_functions[activation_function][0], activation_functions[activation_function][1]))
-  activations.append(activation_function)
-  st.success(f"Layer {layer_number} added!")
-
-# Display model layers as table
+# Display model summary
 st.subheader("Model Summary")
-
-layers = pd.DataFrame(columns=["Layer", "Number of Neurons", "Activation Function"])
-for i, layer in enumerate(model.layers):
-  layers.loc[i] = [i+1, layer.n_neurons, activations[i]]
-
-st.dataframe(layers, hide_index=True)
+layers_summary = pd.DataFrame([
+    {"Layer": i+1, "Number of Neurons": l.n_neurons, "Activation Function": st.session_state.activations[i]}
+    for i, l in enumerate(st.session_state.model.layers)
+])
+st.dataframe(layers_summary, hide_index=True)
 
 if st.button("Compile Model"):
-  model.compile()
+  st.session_state.model.compile()
   st.session_state.model_compiled = True
-  print("Any NaNs in X?", np.isnan(st.session_state.X_y_train[0]).any())
-  print("Any NaNs in y?", np.isnan(st.session_state.X_y_train[1]).any())
   st.success("Model compiled!")
 
-show_weights_biases = st.checkbox("Show Weights and Biases")
-
-if show_weights_biases:
+if st.checkbox("Show Weights and Biases") and st.session_state.model_compiled:
   st.subheader("Weights and Biases")
-  
-  # collect weights and biases from model
-  biases = []
-  weights = []
-  for i, layer in enumerate(model.layers):
-    biases.append(layer.b_.T)
-  for i, weight in enumerate(model.weights):
-    weights.append(weight.matrix)
-
-  # display
-  for i in range(len(weights)):
-    st.write(f"Layer {i+1} Biases:")
-    st.write(biases[i])
-    st.write(f"Next Weights:")
-    st.write(weights[i])
-  st.write(f"Layer {len(weights)+1} Biases:")
-  st.write(biases[-1])
+  for i, layer in enumerate(st.session_state.model.layers):
+        st.write(f"Layer {i+1} Biases:", layer.b_.T)
+  for i, weight in enumerate(st.session_state.model.weights):
+      st.write(f"Layer {i+1} to {i+2} Weights:", weight.matrix)
 
 # PREP PLOTTING
-
 plotter = st.session_state.plotter
 
 @st.cache_data
