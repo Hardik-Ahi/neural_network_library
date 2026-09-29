@@ -1,6 +1,18 @@
 import streamlit as st
 import numpy as np
 import pandas as pd
+import io
+
+from nn.trainer import Trainer, RegressionTrainer
+from nn.optimizers import SGD
+from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data
+from nn.model_classes import Model
+from nn.functions import MSE, BinaryLoss
+from nn.model_classes import Model, Layer
+from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu, mirror, der_mirror
+from nn.plotter import Plotter
+from nn.trainer import Logger
+from nn.dataset_utils import pca
 
 # STREAMLIT CONFIG
 st.set_page_config(
@@ -12,13 +24,37 @@ st.title("Neural Network from Scratch",
   text_alignment="center", 
   icon=":material/network_node:")
 
-def clear_session():
+# SESSION STATE
+if 'target_type' not in st.session_state:
+  st.session_state.target_type = None
+if 'target_name' not in st.session_state:
+  st.session_state.target_name = None
+if 'model' not in st.session_state:
+  st.session_state.model = None
+if 'model_compiled' not in st.session_state:
+  st.session_state.model_compiled = False
+if 'train_set' not in st.session_state:
+  st.session_state.train_set = None
+if 'test_set' not in st.session_state:
+  st.session_state.test_set = None
+if 'X_y_train' not in st.session_state:
+  st.session_state.X_y_train = []
+if 'X_y_test' not in st.session_state:
+  st.session_state.X_y_test = []
+if 'activations' not in st.session_state:
+  st.session_state.activations = list()
+if 'plotter' not in st.session_state:
+  st.session_state.plotter = Plotter()
+if 'data' not in st.session_state:
+  st.session_state.data = None
+if 'history' not in st.session_state:
+  st.session_state.history = None
+
+if st.button("Reset Current Session", type="primary"):
   for key in st.session_state.keys():
     del st.session_state[key]
 
-if st.button("Reset Current Session", type="primary"):
-  clear_session()
-
+# DATASET
 @st.cache_data
 def load_train():
   X_train, y_train = and_gate_dataset(100, 1)
@@ -31,22 +67,7 @@ def load_test():
   dataset = pd.DataFrame(np.hstack((X_test, y_test)), columns=["Input 1", "Input 2", "Output"])
   return dataset
 
-# DATASET
-from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data
-from nn.model_classes import Model
-from nn.functions import MSE, BinaryLoss
-
 st.header("Dataset")
-if 'target_type' not in st.session_state:
-  st.session_state.target_type = None
-  st.session_state.target_name = None
-
-if 'train_set' not in st.session_state:
-  st.session_state.train_set = None
-  st.session_state.test_set = None
-  st.session_state.X_y_train = []
-  st.session_state.X_y_test = []
-
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
 if dataset_option == "Upload a Dataset":
@@ -152,8 +173,6 @@ with test2:
   st.dataframe(st.session_state.test_set[[st.session_state.target_name]])
 
 # MODEL
-from nn.model_classes import Model, Layer
-from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu, mirror, der_mirror
 
 activation_functions = {
     "None": [None, None],
@@ -165,9 +184,6 @@ activation_functions = {
 
 st.header("Model")
 st.subheader("Add Layers")
-  
-if "activations" not in st.session_state:
-    st.session_state.activations = list()
 
 model = st.session_state.model
 activations = st.session_state.activations
@@ -230,16 +246,6 @@ if show_weights_biases:
   st.write(biases[-1])
 
 # PREP PLOTTING
-from nn.plotter import Plotter
-from nn.trainer import Logger
-from nn.dataset_utils import pca
-import io
-
-if 'plotter' not in st.session_state:
-  st.session_state.plotter = Plotter()
-
-if 'data' not in st.session_state:
-  st.session_state.data = None
 
 plotter = st.session_state.plotter
 
@@ -294,6 +300,16 @@ def plot_regression(string):
   return image_bytes
 
 @st.cache_data
+def plot_classification(string):
+  axis = pca(st.session_state.X_y_train[0], n_components=2)
+  classification = plotter.plot_classification(st.session_state.data, axis[:, 0], axis[:, 1], st.session_state.X_y_train[1])
+  buf = io.BytesIO()
+  classification.savefig(buf, format="png", bbox_inches="tight")
+  buf.seek(0)
+  image_bytes = buf.getvalue()
+  return image_bytes
+
+@st.cache_data
 def plot_loss_landscape(string, _trainer, _X_train, _y_train):
   contours = plotter.plot_contours(st.session_state.data, _trainer, _X_train, _y_train)
   buf = io.BytesIO()
@@ -303,8 +319,6 @@ def plot_loss_landscape(string, _trainer, _X_train, _y_train):
   return image_bytes
 
 # TRAIN
-from nn.trainer import Trainer, RegressionTrainer
-from nn.optimizers import SGD
 
 st.header("Training")
 
@@ -335,9 +349,6 @@ if submitted:
 
   st.success("Training completed!")
   st.session_state.history = trainer.save_history()
-
-if 'history' not in st.session_state:
-  st.session_state.history = None
 
 # PLOT
 st.header("Training History")
@@ -371,7 +382,8 @@ if st.button("Plot History"):
     if st.session_state.target_type == 'regression':
       predictions = plot_regression(st.session_state.history)
     elif st.session_state.target_type == 'classification':
-      predictions = plot_and_gate_predictions(st.session_state.history, X_train)  # just AND gate for now
+      #predictions = plot_and_gate_predictions(st.session_state.history, X_train)
+      predictions = plot_classification(st.session_state.history)
     st.subheader("Predictions")
     st.image(predictions, width='stretch')
 
