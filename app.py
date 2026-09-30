@@ -16,6 +16,8 @@ st.set_page_config(page_title="Neural Network Demonstration", layout="wide" )
 st.title("Neural Network from Scratch", text_alignment="center", icon=":material/network_node:")
 
 # SESSION STATE
+if 'uploaded_dataset' not in st.session_state:
+  st.session_state.uploaded_dataset = None
 if 'target_type' not in st.session_state:
   st.session_state.target_type = None
 if 'target_name' not in st.session_state:
@@ -75,10 +77,10 @@ def load_test():
 '''
 
 def preprocess_dataset():
-  raw_data = pd.read_csv(st.session_state.uploaded_dataset)
+  raw_data = st.session_state.uploaded_dataset
   raw_data = raw_data.dropna(ignore_index=True)
   
-  target_col = st.session_state.form_target_col
+  target_col = st.session_state.form_target_column
   target_type = st.session_state.form_target_type
 
   if st.session_state.form_one_hot_columns:
@@ -110,9 +112,10 @@ st.header("Dataset")
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
 if dataset_option == "Upload a Dataset":
-  uploaded_file = st.file_uploader("Choose a CSV file", type="csv", key="uploaded_dataset")
+  uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
   if uploaded_file is not None:
     dataset = pd.read_csv(uploaded_file)
+    st.session_state.uploaded_dataset = dataset
     st.dataframe(dataset)
     st.subheader("Preprocess Dataset")
 
@@ -122,6 +125,7 @@ if dataset_option == "Upload a Dataset":
       st.multiselect("Select columns to one-hot encode", dataset.columns, key="form_one_hot_columns")
       st.multiselect("Select columns to standardize", dataset.columns, key="form_standardize_columns")
       st.form_submit_button("Apply Preprocessing", on_click=preprocess_dataset)
+    
     '''
     if submitted:
       # 0. Store target type for further use
