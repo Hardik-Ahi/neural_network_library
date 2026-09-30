@@ -2,15 +2,20 @@ import numpy as np
 from numpy.random import default_rng
 from nn.dataset_utils import get_minibatch
 from nn.functions import round_off
+from nn.optimizers import SGD
 import json, os, time
 
 class Trainer:
 
-    def __init__(self, model, optimizer):
+    def __init__(self, model, optimizer=None):
         self.model = model
-        self.optimizer = optimizer
+        self.optimizer = SGD() if optimizer is None else optimizer
         self.optimizer.set_model(self.model)
         self.logger = Logger()
+    
+    def set_optimizer(self, optimizer):
+        self.optimizer = optimizer
+        self.optimizer.set_model(self.model)
     
     def error_output_layer(self, label):
         value = self.optimizer.error_output_layer(label)

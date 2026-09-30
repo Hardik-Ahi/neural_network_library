@@ -4,7 +4,7 @@ import pandas as pd
 import io
 
 from nn.trainer import Trainer, RegressionTrainer, Logger
-from nn.optimizers import SGD
+from nn.optimizers import SGD, Momentum, RMSProp
 from nn.dataset_utils import and_gate_dataset, standardize_data, split_classes, split_data, pca
 from nn.model_classes import Model, Layer
 from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, der_sigmoid, relu, der_relu, mirror, der_mirror
@@ -53,6 +53,12 @@ activation_functions = {
     "Linear": [mirror, der_mirror]
 }
 
+optimizers = {
+  "SGD": SGD,
+  "Momentum": Momentum,
+  "RMSProp": RMSProp
+}
+
 # DATASET
 '''
 @st.cache_data
@@ -81,11 +87,11 @@ def preprocess_dataset():
   if target_type == "classification":
     train_set, test_set = split_classes(raw_data, target_col)
     st.session_state.model = Model(BinaryLoss(), 1)
-    st.session_state.trainer = Trainer(st.session_state.model, SGD())
+    st.session_state.trainer = Trainer(st.session_state.model)
   else:
     train_set, test_set = split_data(raw_data)
     st.session_state.model = Model(MSE(), 1)
-    st.session_state.trainer = RegressionTrainer(st.session_state.model, SGD())
+    st.session_state.trainer = RegressionTrainer(st.session_state.model)
   
   if st.session_state.form_standardize_columns:
     X_means, X_stds = standardize_data(train_set, st.session_state.form_standardize_columns)
@@ -172,7 +178,7 @@ elif dataset_option == "AND Gate (Built-in)":
     st.session_state.X_y_train = [X_train, y_train.reshape(-1, 1)]
     st.session_state.X_y_test = [X_test, y_test.reshape(-1, 1)]
     st.session_state.model = Model(BinaryLoss(), 1)
-    st.session_state.trainer = Trainer(st.session_state.model, SGD())
+    st.session_state.trainer = Trainer(st.session_state.model)
     st.session_state.model_compiled = False
 
 # DISPLAY TRAIN, TEST SETS
@@ -196,7 +202,7 @@ st.subheader("Add Layers")
 def add_layer_callback():
     n_neurons = st.session_state.form_neurons
     activation = st.session_state.form_activation
-    st.session_state.model.add_layer(n_neurons)
+    st.session_state.model.add_layer(Layer(n_neurons, activation_functions[activation][0], activation_functions[activation][1]))
     st.session_state.activations.append(activation)
 
 with st.form("add_layers_form"):
@@ -303,34 +309,30 @@ def plot_loss_landscape(string, _trainer, _X_train, _y_train):
 # TRAIN
 
 st.header("Training")
-
+'''
 if st.session_state.target_type == "classification":
   trainer = Trainer(model, SGD())
 elif st.session_state.target_type == "regression":
   trainer = RegressionTrainer(model, SGD())
-
+'''
 # input fields for training
 with st.form("training_form"):
   batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
   learning_rate = st.number_input("Learning Rate (0.001 - 1.0)", min_value=0.001, max_value=1.0, value=0.02, step=0.001, format="%.3f")
   epochs = st.number_input("Epochs (1 - 500)", min_value=1, max_value=500, value=25, step=1)
-
+  optimizer = st.selectbox("Optimizer", optimizers.keys())
   submitted = st.form_submit_button("Train Model")
 
 if submitted:
   if not st.session_state.model_compiled:
     st.error("Please compile the model first.")
-    st.stop()
-
-  with st.spinner("Training in progress..."):
-    if st.session_state.X_y_train is None:
-      st.error("No training data found. Please load the dataset first.")
-      st.stop()
-    X_train, y_train = st.session_state.X_y_train
-    trainer.train(X_train, y_train, batch_size, learning_rate, epochs = epochs)
-
-  st.success("Training completed!")
-  st.session_state.history = trainer.save_history()
+  else:
+    with st.spinner("Training in progress..."):
+      st.session_state.trainer.set_optimizer(optimizers[optimizer]())
+      X_train, y_train = st.session_state.X_y_train
+      st.session_state.trainer.train(X_train, y_train, batch_size, learning_rate, epochs = epochs)
+      st.session_state.history = st.session_state.trainer.save_history()
+    st.success("Training completed!")
 
 # PLOT
 st.header("Training History")
@@ -370,7 +372,7 @@ if st.button("Plot History"):
     st.image(predictions, width='stretch')
 
   with st.spinner("Plotting loss landscape (this takes a while)..."):
-    loss_landscape_path = plot_loss_landscape(st.session_state.history, trainer, X_train, y_train)
+    loss_landscape_path = plot_loss_landscape(st.session_state.history, st.session_state.trainer, X_train, y_train)
     st.subheader("Loss Landscape")
     st.image(loss_landscape_path, width='stretch')
 
