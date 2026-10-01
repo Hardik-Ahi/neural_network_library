@@ -11,7 +11,7 @@ from nn.functions import BinaryLoss, MSE, leaky_relu, der_leaky_relu, sigmoid, d
 from nn.plotter import Plotter
 
 # STREAMLIT CONFIG
-st.set_page_config(page_title="Neural Network Demonstration", layout="wide" )
+st.set_page_config(page_title="Neural Network Demonstration", layout="wide")
 
 st.title("Neural Network from Scratch", text_alignment="center", icon=":material/network_node:")
 
@@ -62,26 +62,16 @@ optimizers = {
 }
 
 # DATASET
-'''
-@st.cache_data
-def load_train():
-  X_train, y_train = and_gate_dataset(100, 1)
-  dataset = pd.DataFrame(np.hstack((X_train, y_train)), columns=["Input 1", "Input 2", "Output"])
-  return dataset
-
-@st.cache_data
-def load_test():
-  X_test, y_test = and_gate_dataset(50, 2)
-  dataset = pd.DataFrame(np.hstack((X_test, y_test)), columns=["Input 1", "Input 2", "Output"])
-  return dataset
-'''
 
 def preprocess_dataset():
   raw_data = st.session_state.uploaded_dataset
   raw_data = raw_data.dropna(ignore_index=True)
   
+  # session state
   target_col = st.session_state.form_target_column
   target_type = st.session_state.form_target_type
+  st.session_state.target_type = target_type
+  st.session_state.target_name = target_col
 
   if st.session_state.form_one_hot_columns:
     raw_data = pd.get_dummies(raw_data, columns=st.session_state.form_one_hot_columns, drop_first=True, dtype=int)
@@ -108,6 +98,9 @@ def preprocess_dataset():
   X_test, y_test = test_set.drop(columns=[target_col]), test_set[target_col]
   st.session_state.X_y_test = [X_test.to_numpy(), y_test.to_numpy().reshape(-1, 1)]
 
+  st.toast("Preprocessing Applied")
+
+
 st.header("Dataset")
 dataset_option = st.selectbox("Select Dataset", ["AND Gate (Built-in)", "Upload a Dataset"])
 
@@ -125,49 +118,6 @@ if dataset_option == "Upload a Dataset":
       st.multiselect("Select columns to one-hot encode", dataset.columns, key="form_one_hot_columns")
       st.multiselect("Select columns to standardize", dataset.columns, key="form_standardize_columns")
       st.form_submit_button("Apply Preprocessing", on_click=preprocess_dataset)
-    
-    '''
-    if submitted:
-      # 0. Store target type for further use
-      st.session_state.target_type = target_type
-      st.session_state.target_name = target_column
-
-      # 0.5 Remove NA rows - silently
-      dataset = dataset.dropna(ignore_index=True)
-
-      # 1. Apply one-hot encoding
-      if one_hot_columns:
-          dataset = pd.get_dummies(dataset, columns=one_hot_columns, drop_first=True, dtype=int)
-          st.success("One-hot encoding applied!")
-
-      # 2. Split into train and test sets
-      if target_type == "classification":
-        print("using classification target")
-        train_set, test_set = split_classes(dataset, target_column)  # preserves class balance
-        st.session_state.model = Model(BinaryLoss(), 1)
-      elif target_type == "regression":
-        print("using regression target")
-        train_set, test_set = split_data(dataset)
-        st.session_state.model = Model(MSE(), 1)
-      
-      st.session_state.model_compiled = False
-      
-      # 2.5 Store train and test sets in session state
-      st.session_state.train_set = train_set
-      st.session_state.test_set = test_set
-
-      # 3. Standardize selected columns
-      if standardize_columns:
-        X_means, X_stds = standardize_data(train_set, standardize_columns)
-        standardize_data(test_set, standardize_columns, from_means=X_means, from_stds=X_stds)
-        st.success("Standardization applied!")
-
-      # 4. extract features and labels for train and test sets
-      X_train, y_train = train_set.drop(columns=[target_column]), train_set[target_column]
-      st.session_state.X_y_train = [X_train.to_numpy(), y_train.to_numpy().reshape(-1, 1)]
-      X_test, y_test = test_set.drop(columns=[target_column]), test_set[target_column]
-      st.session_state.X_y_test = [X_test.to_numpy(), y_test.to_numpy().reshape(-1, 1)]
-      '''
 elif dataset_option == "AND Gate (Built-in)":
   if st.session_state.train_set is None or st.session_state.target_name != "Output":
     X_train, y_train = and_gate_dataset(100, 1)
@@ -313,12 +263,6 @@ def plot_loss_landscape(string, _trainer, _X_train, _y_train):
 # TRAIN
 
 st.header("Training")
-'''
-if st.session_state.target_type == "classification":
-  trainer = Trainer(model, SGD())
-elif st.session_state.target_type == "regression":
-  trainer = RegressionTrainer(model, SGD())
-'''
 # input fields for training
 with st.form("training_form"):
   batch_size = st.number_input("Batch Size (1 - 32)", min_value=1, max_value=32, value=1, step=1)
